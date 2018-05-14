@@ -1,0 +1,18 @@
+<script src="/socket.io/socket.io.js"></script>
+
+<script>
+
+    // Te unes
+    var socket = io();
+    socket.emit("login", "Usuario_" + Math.random());
+
+    // Envias primer mensaje
+    socket.on('init', function (data) {
+        socket.emit("chat message", "mensajeee")
+    });
+
+    socket.on('home', function(msg){
+        document.write("Esta es toda tu informacion: " + msg);
+
+    });
+</script>

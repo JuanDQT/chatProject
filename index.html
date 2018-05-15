@@ -4,15 +4,17 @@
 
     // Te unes
     var socket = io();
-    socket.emit("login", "Usuario_" + Math.random());
+    //    socket.emit("login", "Usuario_" + Math.random());
+
+    var data = {
+        from: socket.id,
+        to: "JUANDQT",
+        message: "QUE PASA SOCIO"
+    };
+    socket.emit("MESSAGE_TO", data);
 
     // Envias primer mensaje
-    socket.on('init', function (data) {
-        socket.emit("chat message", "mensajeee")
-    });
-
-    socket.on('home', function(msg){
-        document.write("Esta es toda tu informacion: " + msg);
-
+    socket.on('GET_SINGLE_MESSAGE', function (data) {
+        document.write("Recibimos algo");
     });
 </script>

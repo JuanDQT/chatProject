@@ -22,7 +22,7 @@ io.on('connection', function (socket) {
         var data = JSON.parse(msg);
         all[data['clientID']] = data['socketID'];
 
-        console.log(msg);
+/*        console.log(msg);
         setTimeout(function () {
             //do what you need here
             socket.emit('home',
@@ -30,22 +30,19 @@ io.on('connection', function (socket) {
                     data: "Mensaje de bienvenida: " + msg
                 }
             );
-        }, 1000);
+        }, 1000);*/
 
     });
 
     socket.on('MESSAGE_TO', function (msg) {
-        var socketIDTO = all[msg['to']];
-        console.log("Tenemos que enviar un mensaje a: " + all[msg['to']]);
-        console.log("Mensaje:" + msg['message']);
 
-        io.sockets.to(socketIDTO).emit("GET_SINGLE_MESSAGE", msg);
-        // clients[socketIDTO].emit("GET_SINGLE_MESSAGE", msg['message']);
+        console.log(msg);
+        var data = JSON.parse(msg);
+        var socketIDTO = all[data['to']];
 
-        // io.sockets.connected[clients[0]].emit("GET_SINGLE_MESSAGE", msg);
+        io.sockets.to(socketIDTO).emit("GET_SINGLE_MESSAGE", data);
 
     });
-
 
     // Automatico
     socket.on('disconnect', function () {

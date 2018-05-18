@@ -1,20 +1,36 @@
+<body>
+<input type="text" id="texto">
+<button type="button" id="enviar" >Enviar</button>
 <script src="/socket.io/socket.io.js"></script>
-
 <script>
 
     // Te unes
     var socket = io();
-    //    socket.emit("login", "Usuario_" + Math.random());
 
-    var data = {
-        from: socket.id,
-        to: "JQUISPE",
-        message: "QUE HACES"
-    };
-    socket.emit("MESSAGE_TO", data);
+    document.getElementById("enviar").addEventListener('click', function() {
+
+        var textElement = document.getElementById("texto");
+
+
+        var data = {
+            from: socket.id,
+            to: "EMULATOR",
+            message: textElement.value
+        };
+
+
+        socket.emit("MESSAGE_TO", data);
+        textElement.value = "";
+    }, false);
+
 
     // Envias primer mensaje
-    socket.on('GET_SINGLE_MESSAGE', function (data) {
-        document.write("Recibimos algo");
+    socket.on('GET_SINGLE_MESSAGE', function (msg) {
+        var data = JSON.parse(msg);
+
+        document.write(data['message']);
     });
+
+
 </script>
+</body>

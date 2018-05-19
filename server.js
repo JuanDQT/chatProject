@@ -36,8 +36,10 @@ io.on('connection', function (socket) {
 
     socket.on('MESSAGE_TO', function (msg) {
 
-        console.log(msg);
-        var data = JSON.parse(msg);
+        // var data = JSON.parse("'" + msg + "'");
+        var data = JSON.parse(JSON.stringify(msg));
+        console.log("data: " + JSON.stringify(msg));
+
         var socketIDTO = all[data['to']];
 
         io.sockets.to(socketIDTO).emit("GET_SINGLE_MESSAGE", data);

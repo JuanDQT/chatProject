@@ -83,10 +83,13 @@ io.on('connection', function (socket) {
     socket.on('disconnect', function () {
 
         var clientID = Object.keys(all).find(key => all[key] === socket.id);
-        console.log('socket disconnected: ' + clientID);
-        db.query('UPDATE Users set online = 0 where code = (?)', clientID);
-        delete all[clientID];
-        console.log("Total in: " + Object.keys(all).length);
+        if (clientID != undefined) {
+            console.log('socket disconnected: ' + clientID);
+            db.query('UPDATE Users set online = 0 where code = (?)', clientID);
+            delete all[clientID];
+            console.log("Total in: " + Object.keys(all).length);
+        }
+
 
         //db.query('UPDATE Users set online = 1 where code = (?)', data['clientID']);
     });

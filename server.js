@@ -2,13 +2,25 @@ var app = require('express')();
 var http = require('http').Server(app);
 var io = require('socket.io')(http);
 var port = process.env.PORT || 3000;
+var mysql = require('mysql');
+
+var db = mysql.createConnection({
+    host: "localhost",
+    user: "root",
+    password: "root",
+    database: "Chat"
+});
+
+db.connect(function(err) {
+    if (err) throw err;
+    console.log("Connected!");
+});
 
 app.get('/', function (req, res) {
     res.sendFile(__dirname + '/index.html');
 });
 
 var clients = [];
-
 var all = new Object();
 
 io.on('connection', function (socket) {
@@ -34,17 +46,30 @@ io.on('connection', function (socket) {
 
     });
 
+    socket.on('USER_IS_TYPING', function (msg) {
+
+        var data = JSON.parse(JSON.stringify(msg));
+        console.log("[USER_IS_TYPING]: " + JSON.stringify(msg));
+
+        var socketIDTO = all[data['to']];
+
+        io.sockets.to(socketIDTO).emit("GET_USER_IS_TYPING", data);
+
+    });
+
     socket.on('MESSAGE_TO', function (msg) {
 
         // var data = JSON.parse("'" + msg + "'");
         var data = JSON.parse(JSON.stringify(msg));
-        console.log("data: " + JSON.stringify(msg));
+        console.log("[MESSAGE_TO]: " + JSON.stringify(msg));
 
         var socketIDTO = all[data['to']];
 
         io.sockets.to(socketIDTO).emit("GET_SINGLE_MESSAGE", data);
 
     });
+
+
 
     // Automatico
     socket.on('disconnect', function () {

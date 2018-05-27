@@ -8,10 +8,11 @@ var db = mysql.createConnection({
     host: "localhost",
     user: "root",
     password: "root",
-    database: "Chat"
+    database: "Chat",
+    dateStrings: 'date'
 });
 
-db.connect(function(err) {
+db.connect(function (err) {
     if (err) throw err;
     console.log("Connected!");
 });
@@ -34,9 +35,9 @@ io.on('connection', function (socket) {
         var data = JSON.parse(JSON.stringify(msg));
 
         // if (!(data['clientID'] in all)) {
-            console.log("[LOGIN]", JSON.stringify(msg));
-            all[data['clientID']] = data['socketID'];
-            db.query('UPDATE Users set online = 1 where code = (?)', data['clientID']);
+        console.log("[LOGIN]", JSON.stringify(msg));
+        all[data['clientID']] = data['socketID'];
+        db.query('UPDATE Users set online = 1 where code = (?)', data['clientID']);
         // }
 
         console.log("Total in: " + Object.keys(all).length);
@@ -65,33 +66,42 @@ io.on('connection', function (socket) {
     });
 
     socket.on('CLIENT_SET_LAST_SEEN', function (msg) {
-
         var data = JSON.parse(JSON.stringify(msg));
         console.log("[CLIENT_SET_LAST_SEEN]: " + JSON.stringify(msg));
-        // Notificar a todos que el esta offline y guardarlo en bbdd
         if (data['LAST_SEEN']) {
             db.query('UPDATE Users set last_seen = null where code = (?)', data['FROM']);
 
         } else {
             db.query('UPDATE Users set last_seen = now() where code = (?)', data['FROM']);
         }
+    });
+
+    socket.on('ALL_CHATS_AVAILABLE', function (msg) {
+        var data = JSON.parse(JSON.stringify(msg));
+        console.log("[GET_ALL_CHATS_AVAILABLE]: " + JSON.stringify(msg));
+
+        db.query("SELECT code, name, avatar, online, last_seen FROM Users where banned = 0 and code != (?)", data['FROM'], function (err, result, fields) {
+            if (err) throw err;
+            console.log(JSON.stringify(result));
+
+            io.sockets.to(all[data['FROM']]).emit("GET_ALL_CHATS_AVAILABLE", JSON.parse(JSON.stringify(result)));
+        });
 
     });
+
 
 
     // Automatico
     socket.on('disconnect', function () {
 
         var clientID = Object.keys(all).find(key => all[key] === socket.id);
+
         if (clientID != undefined) {
             console.log('socket disconnected: ' + clientID);
-            db.query('UPDATE Users set online = 0 where code = (?)', clientID);
+            db.query('UPDATE Users set online = 0 where code != (?)', clientID);
             delete all[clientID];
             console.log("Total in: " + Object.keys(all).length);
         }
-
-
-        //db.query('UPDATE Users set online = 1 where code = (?)', data['clientID']);
     });
 });
 

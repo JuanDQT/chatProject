@@ -78,9 +78,9 @@ io.on('connection', function (socket) {
 
     socket.on('ALL_CHATS_AVAILABLE', function (msg) {
         var data = JSON.parse(JSON.stringify(msg));
-        console.log("[GET_ALL_CHATS_AVAILABLE]: " + JSON.stringify(msg));
+        console.log("[ALL_CHATS_AVAILABLE]: " + JSON.stringify(msg));
 
-        db.query("SELECT code, name, avatar, online, last_seen FROM Users where banned = 0 and code != (?)", data['FROM'], function (err, result, fields) {
+        db.query("SELECT code, name, avatar, online, last_seen, banned FROM Users where code != (?)", data['FROM'], function (err, result, fields) {
             if (err) throw err;
             console.log(JSON.stringify(result));
 
@@ -98,7 +98,7 @@ io.on('connection', function (socket) {
 
         if (clientID != undefined) {
             console.log('socket disconnected: ' + clientID);
-            db.query('UPDATE Users set online = 0 where code != (?)', clientID);
+            db.query('UPDATE Users set online = 0 where code = (?)', clientID);
             delete all[clientID];
             console.log("Total in: " + Object.keys(all).length);
         }

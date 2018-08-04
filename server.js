@@ -14,7 +14,7 @@ var db = mysql.createConnection({
 
 db.connect(function (err) {
     if (err) throw err;
-    console.log("Connected!");
+    console.log("Database Connected!");
 });
 
 app.get('/', function (req, res) {
@@ -34,11 +34,16 @@ io.on('connection', function (socket) {
 
         var data = JSON.parse(JSON.stringify(msg));
 
-        // if (!(data['clientID'] in all)) {
         console.log("[LOGIN]", JSON.stringify(msg));
         all[data['clientID']] = data['socketID'];
-        db.query('UPDATE Users set online = 1 where code = (?)', data['clientID']);
-        // }
+        db.query('UPDATE Users set online = 1 where id = (?)', parseInt(data['clientID']));
+
+        db.query("SELECT id_pda, id_user_from as 'from', id_user_to as 'to', message, fecha_envio as date_created FROM Messages where fecha_recepcion is null and id_user_to = (?)", data['clientID'], function (err, result, fields) {
+            if (err) throw err;
+            console.log(JSON.stringify(result));
+
+            io.sockets.to(data['socketID']).emit("GET_PENDING_MESSAGES", JSON.parse(JSON.stringify(result)));
+        });
 
         console.log("Total in: " + Object.keys(all).length);
 
@@ -61,8 +66,16 @@ io.on('connection', function (socket) {
         var data = JSON.parse(JSON.stringify(msg));
         console.log("[MESSAGE_TO]: " + JSON.stringify(msg));
         var socketIDTO = all[data['to']];
-        io.sockets.to(socketIDTO).emit("GET_SINGLE_MESSAGE", data);
 
+        db.query('INSERT INTO Messages(id_pda, id_user_from, id_user_to, message, fecha_envio, fecha_recepcion_servidor) VALUES (?, ?, ?, ?, ?, NOW())', [data['id_pda'], data['from'], data['to'], data['message'], data['date_created']], function (err, result, fields) {
+            if (err)
+                throw err;
+            else {
+                io.sockets.to(all[data['from']]).emit("GET_CONFIRM_MESSAGE_SENT", {"id_pda": data['id_pda'], "id_server": result.insertId});
+                console.log("***ID insertado: " + result.insertId);
+                io.sockets.to(socketIDTO).emit("GET_SINGLE_MESSAGE", data);
+            }
+        });
     });
 
     socket.on('CLIENT_SET_LAST_SEEN', function (msg) {
@@ -80,7 +93,7 @@ io.on('connection', function (socket) {
         var data = JSON.parse(JSON.stringify(msg));
         console.log("[ALL_CHATS_AVAILABLE]: " + JSON.stringify(msg));
 
-        db.query("SELECT code, name, avatar, online, last_seen, banned FROM Users where code != (?)", data['FROM'], function (err, result, fields) {
+        db.query("SELECT id, name, avatar, online, last_seen, banned FROM Users where id != (?)", data['FROM'], function (err, result, fields) {
             if (err) throw err;
             console.log(JSON.stringify(result));
 

@@ -38,14 +38,15 @@ io.on('connection', function (socket) {
         all[data['clientID']] = data['socketID'];
         db.query('UPDATE Users set online = 1 where id = (?)', parseInt(data['clientID']));
 
-        db.query("SELECT id_pda, id_user_from as 'from', id_user_to as 'to', message, fecha_envio as date_created FROM Messages where fecha_recepcion is null and id_user_to = (?)", data['clientID'], function (err, result, fields) {
+        db.query("SELECT id, id_pda, id_user_from as 'from', id_user_to as 'to', message, date_format(fecha_envio, '%d/%m/%Y %H:%m:%s') as date_created FROM Messages where fecha_recepcion is null and id_user_to = (?)", data['clientID'], function (err, result, fields) {
             if (err) throw err;
             console.log(JSON.stringify(result));
 
-            io.sockets.to(data['socketID']).emit("GET_PENDING_MESSAGES", JSON.parse(JSON.stringify(result)));
+            result.forEach(function(row) {
+                io.sockets.to(all[data['clientID']]).emit("GET_SINGLE_MESSAGE", JSON.parse(JSON.stringify(row)));
+                console.log("Descargar: " + JSON.stringify(row));
+            });
         });
-
-        console.log("Total in: " + Object.keys(all).length);
 
     });
 
@@ -64,18 +65,27 @@ io.on('connection', function (socket) {
     socket.on('MESSAGE_TO', function (msg) {
 
         var data = JSON.parse(JSON.stringify(msg));
-        console.log("[MESSAGE_TO]: " + JSON.stringify(msg));
+        // console.log("[MESSAGE_TO]: " + JSON.stringify(msg));
         var socketIDTO = all[data['to']];
 
         db.query('INSERT INTO Messages(id_pda, id_user_from, id_user_to, message, fecha_envio, fecha_recepcion_servidor) VALUES (?, ?, ?, ?, ?, NOW())', [data['id_pda'], data['from'], data['to'], data['message'], data['date_created']], function (err, result, fields) {
             if (err)
                 throw err;
             else {
-                io.sockets.to(all[data['from']]).emit("GET_CONFIRM_MESSAGE_SENT", {"id_pda": data['id_pda'], "id_server": result.insertId});
-                console.log("***ID insertado: " + result.insertId);
-                io.sockets.to(socketIDTO).emit("GET_SINGLE_MESSAGE", data);
+                io.sockets.to(all[data['from']]).emit("GET_UPDATE_MESSAGE_ID_SERVER", {"id_pda": data['id_pda'], "id_server": result.insertId});
+                data.id = result.insertId;
+
+                console.log("[MESSAGE_TO]: " + JSON.parse(JSON.stringify(data)));
+                io.sockets.to(socketIDTO).emit("GET_SINGLE_MESSAGE", JSON.parse(JSON.stringify(data)));
             }
         });
+    });
+
+    // TODO: probar funcionamiento
+    socket.on('MESSAGE_CONFIRM_RECEPCION', function (msg) {
+        var data = JSON.parse(JSON.stringify(msg));
+        console.log("[MESSAGE_CONFIRM_RECEPCION]: " + JSON.stringify(msg));
+        db.query("UPDATE Messages set fecha_recepcion = (?) where id = (?)", [data['fecha_recepcion'], data['id_server']]);
     });
 
     socket.on('CLIENT_SET_LAST_SEEN', function (msg) {

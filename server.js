@@ -38,7 +38,7 @@ io.on('connection', function (socket) {
         all[data['clientID']] = data['socketID'];
         db.query('UPDATE Users set online = 1 where id = (?)', parseInt(data['clientID']));
 
-        db.query("SELECT id, id_pda, id_user_from as 'from', id_user_to as 'to', message, date_format(fecha_envio, '%d/%m/%Y %H:%m:%s') as date_created FROM Messages where fecha_recepcion is null and id_user_to = (?)", data['clientID'], function (err, result, fields) {
+        db.query("SELECT id, id_pda, id_user_from as 'from', id_user_to as 'to', message, date_format(fecha_envio, '%d/%m/%Y %H:%i:%s') as date_created FROM Messages where fecha_recepcion is null and id_user_to = (?)", data['clientID'], function (err, result, fields) {
             if (err) throw err;
             console.log(JSON.stringify(result));
 
@@ -75,7 +75,7 @@ io.on('connection', function (socket) {
                 io.sockets.to(all[data['from']]).emit("GET_UPDATE_MESSAGE_ID_SERVER", {"id_pda": data['id_pda'], "id_server": result.insertId});
                 data.id = result.insertId;
 
-                console.log("[MESSAGE_TO]: " + JSON.parse(JSON.stringify(data)));
+                console.log("[MESSAGE_TO]: " + JSON.stringify(data));
                 io.sockets.to(socketIDTO).emit("GET_SINGLE_MESSAGE", JSON.parse(JSON.stringify(data)));
             }
         });

@@ -50,14 +50,11 @@ io.on('connection', function (socket) {
         });
         db.query("select id from Messages where id_user_to = (?) and fecha_recepcion is not null and fecha_lectura is null", data['clientID'], function (err, result, fields) {
             if (err) throw err;
-            console.log("A buscar fecha_lectura de " + JSON.stringify(result));
-
             if (Object.keys(JSON.parse(JSON.stringify(result))).length > 0)
                 io.sockets.to(all[data['clientID']]).emit("GET_PENDING_MESSAGES_READED", JSON.parse(JSON.stringify(result)));
         });
 
     });
-
 
     socket.on('USER_IS_TYPING', function (msg) {
 
@@ -126,10 +123,23 @@ io.on('connection', function (socket) {
 
     });
 
+    socket.on('SEARCH_USERS_BY_NAME', function (msg) {
+        var data = JSON.parse(JSON.stringify(msg));
+        console.log("[SEARCH_USERS_BY_NAME]: " + JSON.stringify(msg));
 
+        // TODO: por pruebas
+        db.query("SELECT id, name, avatar, online, last_seen, banned FROM Users", function (err, result, fields) {
+        // db.query("SELECT id, name, avatar, online, last_seen, banned FROM Users where id != (?) and banned = 0 and name like '%" + data['name'] +"%'", data['user_from'], function (err, result, fields) {
+            if (err) throw err;
+            console.log(JSON.stringify(result));
+
+            io.sockets.to(all[data['user_from']]).emit("GET_SEARCH_USERS_BY_NAME", JSON.parse(JSON.stringify(result)));
+        });
+    });
 
     // Automatico
     socket.on('disconnect', function () {
+
 
         var clientID = Object.keys(all).find(key => all[key] === socket.id);
 

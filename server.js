@@ -40,12 +40,20 @@ io.on('connection', function (socket) {
 
         db.query("SELECT id, id_pda, id_user_from as 'from', id_user_to as 'to', message, date_format(fecha_envio, '%d/%m/%Y %H:%i:%s') as date_created FROM Messages where fecha_recepcion is null and id_user_to = (?)", data['clientID'], function (err, result, fields) {
             if (err) throw err;
-            console.log(JSON.stringify(result));
 
-            result.forEach(function(row) {
-                io.sockets.to(all[data['clientID']]).emit("GET_SINGLE_MESSAGE", JSON.parse(JSON.stringify(row)));
-                console.log("Descargar: " + JSON.stringify(row));
-            });
+            if (Object.keys(JSON.parse(JSON.stringify(result))).length > 0) {
+                result.forEach(function(row) {
+                    io.sockets.to(all[data['clientID']]).emit("GET_SINGLE_MESSAGE", JSON.parse(JSON.stringify(row)));
+                    console.log("Descargar: " + JSON.stringify(row));
+                });
+            }
+        });
+        db.query("select id from Messages where id_user_to = (?) and fecha_recepcion is not null and fecha_lectura is null", data['clientID'], function (err, result, fields) {
+            if (err) throw err;
+            console.log("A buscar fecha_lectura de " + JSON.stringify(result));
+
+            if (Object.keys(JSON.parse(JSON.stringify(result))).length > 0)
+                io.sockets.to(all[data['clientID']]).emit("GET_PENDING_MESSAGES_READED", JSON.parse(JSON.stringify(result)));
         });
 
     });
@@ -81,12 +89,18 @@ io.on('connection', function (socket) {
         });
     });
 
-    // TODO: probar funcionamiento
     socket.on('MESSAGE_CONFIRM_RECEPCION', function (msg) {
         var data = JSON.parse(JSON.stringify(msg));
         console.log("[MESSAGE_CONFIRM_RECEPCION]: " + JSON.stringify(msg));
         db.query("UPDATE Messages set fecha_recepcion = (?) where id = (?)", [data['fecha_recepcion'], data['id_server']]);
     });
+
+    socket.on('MESSAGE_CONFIRM_LECTURA', function (msg) {
+        var data = JSON.parse(JSON.stringify(msg));
+        console.log("[MESSAGE_CONFIRM_LECTURA]: " + JSON.stringify(msg));
+        db.query("UPDATE Messages set fecha_lectura = (?) where id = (?)", [data['fecha_lectura'], data['id_server']]);
+    });
+
 
     socket.on('CLIENT_SET_LAST_SEEN', function (msg) {
         var data = JSON.parse(JSON.stringify(msg));

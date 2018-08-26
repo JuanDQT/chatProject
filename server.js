@@ -21,7 +21,7 @@ app.get('/', function (req, res) {
     res.sendFile(__dirname + '/index.html');
 });
 
-var all = new Object();
+var all = {};
 
 io.on('connection', function (socket) {
 
@@ -36,7 +36,7 @@ io.on('connection', function (socket) {
 
         console.log("[LOGIN]", JSON.stringify(msg));
 
-        all[data['clientID']] = socket.id;
+        all[data['id_user']] = socket.id;
         db.query('UPDATE Users set online = 1 where id = (?)', parseInt(data['id_user']));
 
         var query = "SELECT id, name, avatar, online, last_seen, banned, false as pending FROM Users where id in " +

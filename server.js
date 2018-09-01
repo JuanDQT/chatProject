@@ -199,19 +199,32 @@ io.on('connection', function (socket) {
         var data = JSON.parse(JSON.stringify(msg));
         console.log("[SEARCH_USERS_BY_NAME]: " + JSON.stringify(msg));
 
-        // TODO: por pruebas
-        db.query("SELECT id, name, avatar, online, last_seen, banned FROM Users", function (err, result, fields) {
-            // db.query("SELECT id, name, avatar, online, last_seen, banned FROM Users where id != (?) and banned = 0 and name like '%" + data['name'] +"%'", data['user_from'], function (err, result, fields) {
+        var sql = "SELECT id, name, avatar, online, last_seen, banned, " +
+            "(" +
+            "case" +
+            " when (select count(*) from contacts where (id_user_from = ? and id_user_to = u.id) or (id_user_from = u.id and id_user_to = ?)) = 0 THEN NULL" +
+            " else ( " +
+            " case " +
+            " when (select accepted from contacts where (id_user_from = ? and id_user_to = u.id) or (id_user_from = u.id and id_user_to = ?) ) = 0 THEN TRUE" +
+            " else FALSE" +
+            " end" +
+            " )" +
+            " END" +
+            " ) as pending" +
+            " FROM Users u" +
+            " where id != ?" +
+            " and name like '%" + data['name'] +"%';";
+
+        db.query(sql, [data['id_user_from'],data['id_user_from'],data['id_user_from'],data['id_user_from'],data['id_user_from']],function (err, result, fields) {
             if (err) throw err;
             console.log(JSON.stringify(result));
 
-            io.sockets.to(all[data['user_from']]).emit("GET_SEARCH_USERS_BY_NAME", JSON.parse(JSON.stringify(result)));
+            io.sockets.to(socket.id).emit("GET_SEARCH_USERS_BY_NAME", JSON.parse(JSON.stringify(result)));
         });
     });
 
     // Automatico
     socket.on('disconnect', function () {
-
 
         var clientID = Object.keys(all).find(key => all[key] === socket.id);
 

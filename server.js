@@ -225,6 +225,8 @@ io.on('connection', function (socket) {
 
     socket.on('SET_CONTACTO_STATUS', function (msg) {
         var data = JSON.parse(JSON.stringify(msg));
+        var socketIDTO = all[data['id_user_to']];
+
         console.log("[SET_CONTACTO_STATUS]: " + JSON.stringify(msg));
         var query = "";
         switch (data["action"]) {
@@ -238,8 +240,12 @@ io.on('connection', function (socket) {
                     console.log("RESULT: " + result[0].existe);
                     if (result[0].existe === 0) {
                         query = "INSERT INTO Contacts (id_user_from, id_user_to) VALUES (?, ?)";
-                        db.query(query, [data['id_user_from'], data['id_user_to']], function (err, res) {
-                        });
+                        db.query(query, [data['id_user_from'], data['id_user_to']], function (err, res) {});
+
+                        var requestTo = {"id_user_from": data['id_user_from']};
+                        // Tambien cada movil cada vez que se conecta a internet, ha de pregunta si tiene peticiones de contacto
+                        console.log("[GET_ASK_REQUEST_CONTACT]", JSON.stringify(requestTo));
+                        io.sockets.to(socketIDTO).emit("GET_ASK_REQUEST_CONTACT", JSON.parse(JSON.stringify(requestTo)));
                     }
                 });
                 break;
@@ -257,6 +263,23 @@ io.on('connection', function (socket) {
 
         }
     });
+
+    socket.on('SEARCH_USERS_BY_ID', function (msg) {
+        var data = JSON.parse(JSON.stringify(msg));
+        console.log("[SEARCH_USERS_BY_ID]: " + JSON.stringify(msg));
+
+        var sql = "SELECT id, name, avatar, online, last_seen, banned, null as pending" +
+            " FROM Users" +
+            " where id in (?)";
+
+        db.query(sql, data["ids"].join(","),function (err, result, fields) {
+            if (err) throw err;
+            console.log(JSON.stringify(result));
+
+            io.sockets.to(socket.id).emit("GET_SEARCH_USERS_BY_NAME", JSON.parse(JSON.stringify(result)));
+        });
+    });
+
 
 
     // Automatico

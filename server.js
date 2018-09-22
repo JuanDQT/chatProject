@@ -25,20 +25,15 @@ var all = {};
 
 io.on('connection', function (socket) {
 
-    // ALguien se ha conectado
-    //console.log("Bienvenido de nuevo");
-    //clients.push(socket.id);
-
     socket.on('LOGIN', function (msg) {
         var response = {};
         response.contacts = {};
         response.messages = {};
         var data = JSON.parse(JSON.stringify(msg));
-        //console.log("[LOGIN]", JSON.stringify(msg));
+        console.log("[LOGIN]", JSON.stringify(msg));
 
         all[data['id_user']] = socket.id;
         db.query('UPDATE Users set online = 1 where id = (?)', parseInt(data['id_user']));
-
 
 
         db.query("SELECT id, id_pda, id_user_from as 'from', id_user_to as 'to', message, date_format(fecha_envio, '%d/%m/%Y %H:%i:%s') as date_created FROM Messages where fecha_recepcion is null and id_user_to = (?)", data['id_user'], function (err, resultMessages, fields) {
@@ -112,6 +107,38 @@ io.on('connection', function (socket) {
 
         });
 
+        // Lo hacemos en un socket independiente para no sobrecargar de ifs el home
+        var query = "select id_user_from, 'true' as status from Contacts where accepted = 0 and id_user_from != ?";
+
+        db.query(query, data['id_user'], function (err, result, fields) {
+            if (err) throw err;
+            console.log("[GET_ASK_REQUEST_CONTACT_STATUS]", JSON.stringify(result));
+
+            if (Object.keys(result).length > 0) {
+
+                for(var i = 0; i < Object.keys(result).length; i++)
+                    io.sockets.to(socket.id).emit("GET_ASK_REQUEST_CONTACT_STATUS", JSON.parse(JSON.stringify(result[i])));
+            }
+
+            for (var j = 0; j < Object.keys(data["ids_contacts_pending"]).length; j++) {
+            // for (var j = 0; j < data["ids_contacts_pending"].size; j ++) {
+
+                var query = "select count(*) as contador from Contacts where accepted = 0 and id_user_from = ? and id_user_to = ?";
+
+                var localID = data["ids_contacts_pending"][j];
+                db.query(query, [data['id_user'], data["ids_contacts_pending"][j]], function (err, result, fields) {
+                    if (err) throw err;
+                    console.log("***" + result[0].contador);
+                    if (parseInt(result[0].contador) === 0) {
+                        console.log("ids_contacts_pending" + localID);
+                        var requestTo = {"id_user_from": localID, "status": false};
+                        console.log("[GET_ASK_REQUEST_CONTACT_STATUS]", JSON.stringify(requestTo));
+                        io.sockets.to(socket.id).emit("GET_ASK_REQUEST_CONTACT_STATUS", JSON.parse(JSON.stringify(requestTo)));
+                    }
+                });
+            }
+
+        });
         return;
 
 
@@ -194,7 +221,7 @@ io.on('connection', function (socket) {
             db.query('UPDATE Users set last_seen = now() where code = (?)', data['FROM']);
         }
     });
-    
+
     socket.on('SEARCH_USERS_BY_NAME', function (msg) {
         var data = JSON.parse(JSON.stringify(msg));
         console.log("[SEARCH_USERS_BY_NAME]: " + JSON.stringify(msg));
@@ -226,11 +253,11 @@ io.on('connection', function (socket) {
     socket.on('SET_CONTACTO_STATUS', function (msg) {
         var data = JSON.parse(JSON.stringify(msg));
         var socketIDTO = all[data['id_user_to']];
-
+        // TODO: probar estos 4 metodos.
         console.log("[SET_CONTACTO_STATUS]: " + JSON.stringify(msg));
         var query = "";
         switch (data["action"]) {
-            case "A":
+            case "SOLICITAR_CONTACTO":
                 query = "select count(*) as existe" +
                     " from contacts" +
                     " where (id_user_from = ? and id_user_to = ?) or (id_user_from = ? and id_user_to = ?)";
@@ -242,23 +269,36 @@ io.on('connection', function (socket) {
                         query = "INSERT INTO Contacts (id_user_from, id_user_to) VALUES (?, ?)";
                         db.query(query, [data['id_user_from'], data['id_user_to']], function (err, res) {});
 
-                        var requestTo = {"id_user_from": data['id_user_from']};
+                        var requestTo = {"id_user_from": data['id_user_from'], "status": true};
                         // Tambien cada movil cada vez que se conecta a internet, ha de pregunta si tiene peticiones de contacto
-                        console.log("[GET_ASK_REQUEST_CONTACT]", JSON.stringify(requestTo));
-                        io.sockets.to(socketIDTO).emit("GET_ASK_REQUEST_CONTACT", JSON.parse(JSON.stringify(requestTo)));
+                        console.log("[GET_ASK_REQUEST_CONTACT_STATUS]", JSON.stringify(requestTo));
+                        io.sockets.to(socketIDTO).emit("GET_ASK_REQUEST_CONTACT_STATUS", JSON.parse(JSON.stringify(requestTo)));
                     }
                 });
                 break;
-            case "U":
-            case "R":
+            case "CANCELAR_CONTACTO":
+            case "DENEGAR_CONTACTO":
+            case "R": // TODO: delete contacto
                 query = "delete" +
                     " from contacts" +
                     " where (id_user_from = ? and id_user_to = ?) or (id_user_from = ? and id_user_to = ?)";
 
                 db.query(query, [data['id_user_from'], data['id_user_to'], data['id_user_to'], data['id_user_from']], function (err, result, fields) {
                     if (err) throw err;
-                    console.log("***Linea Contacto eliminada");
+                    var requestTo = {"id_user_from": data['id_user_from'], type: "ACEPTAR_CONTACTO"};
+                    console.log("[GET_ASK_REQUEST_CONTACT_STATUS]", JSON.stringify(requestTo));
+                    io.sockets.to(socketIDTO).emit("GET_ASK_REQUEST_CONTACT_STATUS", JSON.parse(JSON.stringify(requestTo)));
                 });
+                break;
+            case "ACEPTAR_CONTACTO":
+                // quitar el pending al otro contacto
+                db.query('UPDATE Contacts set accepted = 1 where id_user_from = (?) and id_user_to', [data["id_user_to"], data["id_user_from"]], function (err, result, fields) {
+                    if (err) throw err;
+
+                    var requestTo = {"id_user_from": data['id_user_from'], type: "ACEPTAR_CONTACTO"};
+                    io.sockets.to(socketIDTO).emit("GET_ASK_REQUEST_CONTACT_STATUS", JSON.parse(JSON.stringify(requestTo)));
+                });
+
                 break;
 
         }

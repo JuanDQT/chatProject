@@ -25,88 +25,117 @@ var all = {};
 
 io.on('connection', function (socket) {
 
+    // NOTE: Solo entrara aqui la primera vez. Quiza anadir alguna funcionalidad mas en un futuro para el primer login.
+    // Por lo demas, es bastante parecido al reconnect.
     socket.on('LOGIN', function (msg) {
-        var response = {};
-        response.contacts = {};
-        response.messages = {};
         var data = JSON.parse(JSON.stringify(msg));
-        console.log("[LOGIN]", JSON.stringify(msg));
 
         all[data['id_user']] = socket.id;
+
+        console.log(msg);
+
+        var response = {};
+
         db.query('UPDATE Users set online = 1 where id = (?)', parseInt(data['id_user']));
 
 
-        db.query("SELECT id, id_pda, id_user_from as 'from', id_user_to as 'to', message, date_format(fecha_envio, '%d/%m/%Y %H:%i:%s') as date_created FROM Messages where fecha_recepcion is null and id_user_to = (?)", data['id_user'], function (err, resultMessages, fields) {
+        var query = "SELECT id, name, avatar, online, last_seen, banned FROM Users where id in " +
+            "(" +
+            "select id_user_to from Contacts where (id_user_from = (?) ) " +
+            "union all " +
+            "select id_user_from from Contacts where (id_user_to = (?) ))";
+
+        db.query(query, [data['id_user'], data['id_user']], function (err, resultUsers, fields) {
             if (err) throw err;
 
-            response.messages = resultMessages;
+            response.users = resultUsers;
 
-            var query = "SELECT id, name, avatar, online, last_seen, banned, false as pending FROM Users where id in " +
-                "(" +
-                "select id_user_to from Contacts where accepted = 1 and (id_user_from = (?) ) " +
-                "union all " +
-                "select id_user_from from Contacts where accepted = 1 and (id_user_to = (?) ))";
+            var query = "select id_user_from, id_user_to, status" +
+                " from Contacts where id_user_to = (?) or id_user_from = (?) ";
 
-            db.query(query, [data['id_user'], data['id_user']], function (err, result, fields) {
+            db.query(query, [data['id_user'], data['id_user']], function (err, resultContacts, fields) {
                 if (err) throw err;
-                var idUsersDisponibles = result.map(t => t["id"]).map(String);
-                // var idUsersDisponibles = result.map( t => t["id"]);
-                // db.query("SELECT id, name, avatar, online, last_seen, banned FROM Users where id != (?)", data['FROM'], function (err, result, fields) {
-                response.contacts.disable = [];
-                response.contacts.add = [];
+                response.contacts = resultContacts;
 
-                if (data["ids"] == null || data["ids"].length === 0) {
-                    response.contacts.add = result;
-
-                    // io.sockets.to(socket.id).emit("GET_ALL_CHATS_AVAILABLE", JSON.parse(JSON.stringify(result)));
-                    console.log("[GET_LOGIN_RESPONSE][NEW]: " + JSON.stringify(response));
-                    io.sockets.to(socket.id).emit("GET_LOGIN_RESPONSE", JSON.parse(JSON.stringify(response)));
-                } else {
-
-                    // Segun los ids que nos dan, buscamos si estan entre los ids de la query(Si son contactos)
-                    var contactIDDisabled = [];
-                    for (var x = 0; x < data["ids"].length; x++) {
-                        if (!idUsersDisponibles.includes(data["ids"][x])) {
-                            // Para update!
-                            contactIDDisabled.push(data["ids"][x]);
-                        }
-                    }
-
-                    if (contactIDDisabled.length > 0)
-                        console.log("Actualizamos contactos");
-
-                    response.contacts.disable = contactIDDisabled;
-
-                    var idsAnadir = getContactosId(idUsersDisponibles, data["ids"]);
-
-                    if (idsAnadir.length > 0) {
-
-                        var query = "SELECT id, name, avatar, online, last_seen, banned, false as pending FROM Users where id in " +
-                            "(" +
-                            "select id_user_to from Contacts where accepted = 1 and (id_user_from = (?) or id_user_to in (?) ) " +
-                            "union all " +
-                            "select id_user_from from Contacts where accepted = 1 and (id_user_to = (?) or id_user_from in (?) ))";
-
-                        db.query(query, [data['id_user'], idsAnadir.join(","), data['id_user'], idsAnadir.join(",")], function (err, result2, fields) {
-                            if (err) {
-                                throw err;
-                            }
-                            response.contacts.add = result2;
-                            console.log("[GET_LOGIN_RESPONSE]: " + JSON.stringify(response));
-                            io.sockets.to(socket.id).emit("GET_LOGIN_RESPONSE", JSON.parse(JSON.stringify(response)));
-                        });
-                    } else {
-                        console.log("[GET_LOGIN_RESPONSE]: " + JSON.stringify(response));
-                        io.sockets.to(socket.id).emit("GET_LOGIN_RESPONSE", JSON.parse(JSON.stringify(response)));
-                    }
-
-                }
-
+                console.log("[GET_CONNECT_RESPONSE][OUTPUT]: " + JSON.stringify(response));
+                io.sockets.to(socket.id).emit("GET_CONNECT_RESPONSE", response);
             });
+        });
+    });
 
+    socket.on('RECONNECT', function (msg) {
+
+        var response = {};
+        response.contacts = [];
+        response.users = [];
+
+        var data = JSON.parse(JSON.stringify(msg));
+        all[data['id_user_from']] = socket.id;
+
+        console.log("[RECONNECT][INPUT]", msg);
+
+        query = "select *" +
+            " from Contacts where id_user_from = (?) or id_user_to = (?) ";
+
+        db.query(query, [data['id_user_from'], data['id_user_from']], function (err, result, fields) {
+            if (err) throw err;
+
+            response.contacts = result;
+
+            var usersIdDatabase = result.map(m => m.id_user_from).concat(result.map(m => m.id_user_to)).filter( f => f != msg.id_user_from);
+            var idsToSearch = usersIdDatabase.filter(i => data.users_id.map(Number).indexOf(i) < 0);
+
+            console.log("A anadir: " + idsToSearch);
+
+            var params = [];
+
+            if (idsToSearch.length > 0) {
+                query = "SELECT id, name, avatar, online, last_seen, banned FROM Users where id in (?)";
+
+                db.query(query, idsToSearch.join(','), function (err, resultUsers, fields) {
+                    if (err) throw err;
+
+                    response.users = resultUsers;
+
+                    console.log("[RECONNECT][OUTPUT]: " + JSON.stringify(response));
+                    io.sockets.to(socket.id).emit("GET_CONNECT_RESPONSE", response);
+                });
+
+            } else {
+                // Solo envismos contactos
+                console.log("NO buscamos usuarios");
+                console.log("[RECONNECT][OUTPUT]: " + JSON.stringify(response));
+                io.sockets.to(socket.id).emit("GET_CONNECT_RESPONSE", response);
+            }
 
         });
 
+        db.query("select id from Messages where id_user_to = (?) and fecha_recepcion is not null and fecha_lectura is null", data['id_user_from'], function (err, result, fields) {
+            if (err) throw err;
+            if (Object.keys(JSON.parse(JSON.stringify(result))).length > 0)
+                io.sockets.to(socket.id).emit("GET_PENDING_MESSAGES_READED", JSON.parse(JSON.stringify(result)));
+        });
+    });
+
+    socket.on('ALL_MESSAGES', function (msg) {
+
+        var data = JSON.parse(JSON.stringify(msg));
+        console.log("[ALL_MESSAGES]", JSON.stringify(msg));
+
+
+        db.query("SELECT id, id_pda, id_user_from as 'from', id_user_to as 'to', message, date_format(fecha_envio, '%d/%m/%Y %H:%i:%s') as date_created FROM Messages where fecha_recepcion is null and id_user_to = (?)", data['id_user_from'], function (err, resultMessages, fields) {
+            if (err) throw err;
+
+            if (Object.keys(resultMessages).length > 1) {
+                for(var i = 0; i < Object.keys(resultMessages).length; i++)
+                    io.sockets.to(socket.id).emit("GET_SINGLE_MESSAGE", JSON.parse(JSON.stringify(resultMessages[i])));
+            } else {
+                console.log("[ALL_MESSAGES]: " + JSON.stringify(resultMessages));
+                io.sockets.to(socket.id).emit("GET_ALL_MESSAGES", resultMessages);
+            }
+        });
+
+        return;
         // Lo hacemos en un socket independiente para no sobrecargar de ifs el home
         var query = "select id_user_from, 'true' as status from Contacts where accepted = 0 and id_user_from != ?";
 
@@ -121,7 +150,7 @@ io.on('connection', function (socket) {
             }
 
             for (var j = 0; j < Object.keys(data["ids_contacts_pending"]).length; j++) {
-            // for (var j = 0; j < data["ids_contacts_pending"].size; j ++) {
+                // for (var j = 0; j < data["ids_contacts_pending"].size; j ++) {
 
                 var query = "select count(*) as contador from Contacts where accepted = 0 and id_user_from = ? and id_user_to = ?";
 
@@ -157,13 +186,11 @@ io.on('connection', function (socket) {
 
         // Pregunta al movil si tiene mensajes leidos pendientes de enviar. enviar con otro socket
         return;
-        db.query("select id from Messages where id_user_to = (?) and fecha_recepcion is not null and fecha_lectura is null", data['clientID'], function (err, result, fields) {
-            if (err) throw err;
-            if (Object.keys(JSON.parse(JSON.stringify(result))).length > 0)
-                io.sockets.to(all[data['clientID']]).emit("GET_PENDING_MESSAGES_READED", JSON.parse(JSON.stringify(result)));
-        });
 
     });
+
+
+
 
     socket.on('USER_IS_TYPING', function (msg) {
 
@@ -304,24 +331,6 @@ io.on('connection', function (socket) {
         }
     });
 
-    socket.on('SEARCH_USERS_BY_ID', function (msg) {
-        var data = JSON.parse(JSON.stringify(msg));
-        console.log("[SEARCH_USERS_BY_ID]: " + JSON.stringify(msg));
-
-        var sql = "SELECT id, name, avatar, online, last_seen, banned, null as pending" +
-            " FROM Users" +
-            " where id in (?)";
-
-        db.query(sql, data["ids"].join(","),function (err, result, fields) {
-            if (err) throw err;
-            console.log(JSON.stringify(result));
-
-            io.sockets.to(socket.id).emit("GET_SEARCH_USERS_BY_NAME", JSON.parse(JSON.stringify(result)));
-        });
-    });
-
-
-
     // Automatico
     socket.on('disconnect', function () {
 
@@ -350,4 +359,7 @@ function getContactosId(all, local) {
     }
 
     return ids;
+}
+
+function getAllUsers(idUserFrom) {
 }

@@ -304,29 +304,17 @@ io.on('connection', function (socket) {
                         io.sockets.to(socketIDTO).emit("GET_ASK_REQUEST_CONTACT_STATUS", JSON.parse(JSON.stringify(requestTo)));
                     }
                 });
-
-                break;
-            case "R": // TODO: delete contacto
-                query = "delete" +
-                    " from contacts" +
-                    " where (id_user_from = ? and id_user_to = ?) or (id_user_from = ? and id_user_to = ?)";
-
-                db.query(query, [data['id_user_from'], data['id_user_to'], data['id_user_to'], data['id_user_from']], function (err, result, fields) {
-                    if (err) throw err;
-                    var requestTo = {"id_user_from": data['id_user_from'], type: "ACEPTAR_CONTACTO"};
-                    console.log("[GET_ASK_REQUEST_CONTACT_STATUS]", JSON.stringify(requestTo));
-                    io.sockets.to(socketIDTO).emit("GET_ASK_REQUEST_CONTACT_STATUS", JSON.parse(JSON.stringify(requestTo)));
-                });
                 break;
             case "ACEPTAR_CONTACTO":
             case "DENEGAR_CONTACTO":
-            case "CANCELAR_CONTACTO":
+            case "CANCELAR_ENVIO_SOLICITUD":
                 query = "select count(*) as existe" +
                     " from contacts" +
                     " where (id_user_from = ? and id_user_to = ?)";
 
                 db.query(query, [data['id_user_from'], data['id_user_to']], function (err, result, fields) {
-                    if (err) throw err;
+                    if (err)
+                        io.sockets.to(socket.id).emit("GET_ASK_REQUEST_CONTACT_STATUS", {error: "-1"});
 
                     if (result[0].existe === 1) {
 
@@ -342,7 +330,7 @@ io.on('connection', function (socket) {
                                 });
                                 break;
                             case "DENEGAR_CONTACTO":
-                            case "CANCELAR_CONTACTO":
+                            case "CANCELAR_ENVIO_SOLICITUD":
                                 db.query('DELETE FROM Contacts where id_user_from = (?) and id_user_to = (?)', [data["id_user_from"], data["id_user_to"]], function (err, result, fields) {
                                     if (err) throw err;
 

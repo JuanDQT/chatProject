@@ -28,6 +28,8 @@ io.on('connection', function (socket) {
     // NOTE: Solo entrara aqui la primera vez. Quiza anadir alguna funcionalidad mas en un futuro para el primer login.
     // Por lo demas, es bastante parecido al reconnect.
     socket.on('LOGIN', function (msg) {
+
+        // TODO: VALIDAR SI SE ACTUALIZA LA ULTIMA FECHA CONEXION, OFFLINE, ETC.
         var data = JSON.parse(JSON.stringify(msg));
 
         all[data['id_user']] = socket.id;
@@ -117,6 +119,7 @@ io.on('connection', function (socket) {
         });
     });
 
+    // TODO: VALIDAR EL FUNCIONAMIENTO DE LOS MENSAJES.. SI LLEGAN
     socket.on('ALL_MESSAGES', function (msg) {
 
         var data = JSON.parse(JSON.stringify(msg));
